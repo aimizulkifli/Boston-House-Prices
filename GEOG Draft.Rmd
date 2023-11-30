@@ -1,6 +1,6 @@
 ---
 title: "GEOG 5917 Assignment"
-author: "Aimi Mohd Zulkifli (201669666)"
+author: "Aimi Mohd Zulkifli"
 date: "`r Sys.Date()`"
 output: pdf_document
 ---
