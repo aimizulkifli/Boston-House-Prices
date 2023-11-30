@@ -1,0 +1,151 @@
+---
+title: "GEOG5917 Assignment"
+author: "Aimi Mohd Zulkifli (201669666)"
+date: "`r Sys.Date()`"
+output:
+  pdf_document:
+    df_print: kable
+    fig_caption: yes
+  word_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, fig.align="center")
+```
+
+## Extreme Gradient Boosting Linear (`xgbLinear`) Model of Boston House Prices
+
+## Introduction
+
+|      In this study, we constructed a predictive Extreme Gradient Boosting Linear (`xgbLinear`) model of house prices using the Boston Housing dataset. This study aims to develop an Extreme Gradient Boosting Linear (`xgbLinear`) model to accurately predict house prices based on various predictors such as the number of rooms, crime rate, accessibility to highways, and others. We explored the impact of different hyperparameters on the model's performance and provided recommendations for optimizing the model for future use. The findings of this study will be useful for real estate professionals and policymakers in making informed decisions regarding housing prices. 
+
+|      We applied the Extreme Gradient Boosting Linear (`xgbLinear`) modelling approach in this study due to its ability to handle complex relationships. The Boston Housing dataset contains multiple variables that may have complex relationships with the response variable (house prices), such as crime rate, average number of rooms, and proximity to employment centers. Thus, the `xgbLinear` algorithm has the capability to handle such complex relationships and may be able to capture important nonlinearities and interactions among the variables. Another advantage of using `xgbLinear` is its robustness to outliers. This algorithm is able to handle any missing data and outliers that may exist in the Boston Housing dataset.
+
+## Method
+
+|      The Boston Housing dataset is a classic dataset used in regression analysis to predict the median value of owner-occupied homes in various suburbs of Boston. The dataset contains 506 observations and 14 variables, including information such as crime rate, average number of rooms per dwelling, pupil-teacher ratio, and the proportion of lower status of the population. The target variable, **medv**, represents the median value of owner-occupied homes in thousands of dollars. The dataset is often used for regression analysis and serves as a benchmark for new algorithms or modeling techniques. Table 1 below shows the first six observations in Boston Housing dataset.
+```{r , echo=FALSE, results='hide'}
+
+library(mlbench)
+```
+```{r, echo=FALSE , results='hide'}
+data(BostonHousing)
+head(BostonHousing)
+```
+```{r, echo=FALSE}
+knitr::kable(head(BostonHousing), caption = "Boston Housing Dataset (head)")
+```
+
+
+|      Before creating an `xgbLinear` model for the Boston Housing dataset, some pre-processing steps are typically performed. These may include splitting the dataset into two subsets and scaling the numerical variables. We splitted the data into train and test subsets to evaluate the model's performance on independent, unseen data. Splitting the data into train and test subsets using `createDataPartition` allows us to train the model on the training data and evaluate its performance on the test data, which is independent of the training data. Typically, we split the data with a ratio of around 80:20 to ensure the distributions of the response variable are similar across the two splits.
+```{r, echo=FALSE, results='hide', message=FALSE, warning=FALSE}
+library(xgboost)
+library(caret)
+library(tidyverse)
+
+```
+```{r, echo=FALSE, results='hide'}
+set.seed(123)
+train_idx <- createDataPartition(BostonHousing$medv, p = 0.8, list = F) 
+train_data <- BostonHousing[train_idx, ]
+test_data <- BostonHousing[-train_idx, ]
+```
+
+```{r, echo=FALSE}
+summary(train_data$medv)
+summary(test_data$medv)
+```
+|      After data splitting is done, we rescaled the predictor variables to ensure that variables with different scales do not affect our model's performance. As it is sensitive to the variables' scale, having vastly different scales can lead to numerical instability or suboptimal performance. Rescaling the predictor variables using standardisation technique is where we subtracted the mean and divided by the standard deviation. It is vital to rescale the data separately for the train and test subsets to prevent data leakage and ensure that the model is only trained on the training data. By splitting the data into train and test subsets before rescaling, we can ensure that the scaling parameters (such as mean and standard deviation) are estimated only from the training data and then applied separately to both the training and test data. Table 2 shows the first three observations in train datasets after being rescaled.
+
+```{r, echo=FALSE, results='hide'}
+train.data.z =
+  train_data %>% select(-medv) %>%
+  mutate_if(is_character,as.factor) %>%
+  mutate_if(is_double,scale) %>%  data.frame()
+test.data.z =
+  test_data %>% select(-medv) %>%
+  mutate_if(is_character,as.factor) %>%
+  mutate_if(is_double,scale) %>%  data.frame()
+
+train.data.z$medv = train_data$medv
+test.data.z$medv = test_data$medv
+```
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+library(kableExtra)
+kbl(head(train.data.z, 3), caption = "Sample of Rescaled Train Dataset") %>%
+  kable_styling(latex_options = c("striped", "scale_down", "hold_position"), font_size = 9, )
+```
+|      Once we are done rescaling the train and test datasets, we are ready to create and train the model to learn the patterns and relationships between the predictor variables and the response variable. The goal of training a model is to find a set of parameters or coefficients that best fit the training data, which can then be used to make predictions on new, unseen data. We shall see our `xgbLinear` model that we named it as **xgbModel** in the next section. 
+
+## Results
+
+|      Before we create and train our `xgbLinear` model, we need to use `trainControl` to specify the number of folds, the type of resampling method, and the performance metric to be used for model evaluation. By using `trainControl`, we can easily compare the performance of different models and hyperparameter settings, and select the best-performing model for deployment. The process of finding these hyperparameters involves hyperparameters tuning which using the `tuneGrid` argument. This argument allows us to specify a grid of hyperparameters to search over and the `train` function will fit the model using each combination and evaluate its performance on a validation dataset. This process helps to find the optimal hyperparameters for the model. Without tuning the hyperparameters, the model might not perform optimally and could lead to underfitting or overfitting. Hence, by tuning the hyperparameters using tuneGrid, we can improve the performance of our model and increase its accuracy. Below is the tuning and training setting we used in R for our xgbModel.
+
+```{r}
+tuneGrid <- expand.grid(
+  nrounds = c(50, 100, 150),
+  lambda = c(0.1, 1, 10, 100),
+  alpha = c(0, 0.01, 0.1, 1),
+  eta = c(0, 0.01, 0.1, 0.3)
+)
+
+trainControl <- trainControl(method="cv", number=10)
+
+set.seed(123)
+xgbModel <- train(medv ~ ., data = train.data.z, method = "xgbLinear",
+                  trControl = trainControl, tuneGrid = tuneGrid, verbose = FALSE, metric="MAE")
+```
+In `tuneGrid`, for **lambda** and **alpha**, we choose to try 4 different values from 0 to 100 so that the hyperparameter will not overfitting or underfitting the model. After a few trials of tuning, we chose to use these **lambda** and **alpha** values as it gives the best performance metrics together with the **eta** and **nrounds** values. 
+
+|      After training and tuning our xgbModel, it is important to evaluate its performance using appropriate metrics such as mean squared error (MSE), mean absolute error (MAE), and root mean squared error (RMSE). For example, a lower value of MSE, MAE, or RMSE indicates better performance of the model and a higher Rsquared indicates the best fit model. We can find the best parameter combination by looking at the xgbModel's result and find the min metric. The results suggest that our xgbModel with hyperparameter nrounds =  50, lambda = 1, alpha = 0 and eta = 0 had the lowest mean absolute error (MAE) of 2.15, low root mean squared error (RMSE) of 3.04 and high R-squared value of 0.89. Once the model is trained and evaluated using performance metrics, it can be used to make predictions on the test data. This can be done using the `predict` function. To evaluate the model's performance on test data, we used the same performance metrics used during training. We also plotted the predicted values against the actual values to visually inspect the model's accuracy on test data as follows:
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+set.seed(123)
+
+pred = predict(xgbModel, newdata = test.data.z)
+
+data.frame(Predicted = pred, Observed = test.data.z$medv) %>%
+    ggplot(aes(x = Observed, y = Predicted))+ geom_point(size = 1, alpha = 0.5)+
+    geom_smooth(method = "lm")
+```
+The plot generated shows the predicted values on the x-axis and the actual values on the y-axis. A perfect model would produce a straight line with a slope of 1, representing a 100% accuracy. Any deviation from this line indicates a deviation in accuracy. The closer the points are to the line, the better the model's performance is. In this plot, we can observe that the majority of the points are clustered around the diagonal line, indicating that the model's predictions are fairly accurate. However, there are a few points that deviate significantly from the line, indicating that the model's performance may not be perfect for all instances. It is important to note that the model's performance on new data may differ from its performance on the training data, and so it is important to evaluate the model on multiple datasets to ensure its generalizability.
+```{r, echo=FALSE}
+
+postResample(pred = pred, obs = test.data.z$medv)
+```
+The xgbLinear model achieved a high R-squared value of 0.88 on the test dataset, indicating that it explains 88% of the variability in the median house prices. The model also had a low MAE of 2.37 and RMSE of 3.26. Ideally, the RMSE and MAE on the test data should be similar to or slightly higher than the values obtained on the training data. This indicates that the model has learned the underlying patterns in the training data and is able to make accurate predictions on new, unseen data. Therefore, these results indicate that the model has good predictive power and can generalize well to new data as the differences between MAE and RMSE on training data and test data is small.
+
+|       From here, we will then can access the variable importance plot to determine which predictors have the most impact on the response variable. This can help us gaining insights into which predictors are most relevant for predicting house prices in the Boston Housing dataset. The `varImp` function will output a table showing the relative importance of each feature in the model. The importance scores as below are calculated based on the number of times each predictor is used to split the data across all trees in the model, weighted by the improvement in the evaluation metric (in this case, "RMSE") resulting from each split.
+```{r, echo=FALSE}
+
+varImp(xgbModel, scale = FALSE)
+```
+The variable importance plot shows that the most important features for predicting house prices are the the percentage of lower status of the population, average number of rooms per dwelling, and the distance to employment centers. The model can be applied to other datasets with similar features, and it may be useful in real estate applications to estimate the value of homes.
+
+## Discussion
+
+|      Based on the results we gain, our xgbModel achieved a high R-squared value of 0.88 on the test dataset, indicating that it explains 88% of the variability in the median house prices. This suggests that the model is a good fit for the data and is able to capture the underlying patterns in the dataset. In addition, the model had a low MSE of 10.6 and RMSE of 3.2, which means that the model's predictions are close to the actual values of the median house prices. These metrics indicate that the model has a good predictive performance, and can generalize well to new, unseen data. The variable importance plot shows that the most important features for predicting house prices are the the percentage of lower status of the population, average number of rooms per dwelling and the distance to employment centers. This aligns with our prior understanding that larger houses with more rooms, in areas with a lower percentage of lower status population and closer to employment centers, tend to have higher values. This information can be useful in real estate applications, such as identifying desirable properties for investment or evaluating the potential value of a property.
+
+|      To estimate the performance of our xgbModel on new data, a cross-validation was used . This suggests that the model can generalize well to new data, and we can have some confidence in its ability to make accurate predictions on new data. The hyperparameters of the model also were tuned using a grid search to optimize the model's performance and find the best combination of hyperparameters for the given data. However, we shall aware that the optimal hyperparameters may vary for different datasets and problems. It is important to remember that the model is only as good as the data it was trained on. If the underlying assumptions or properties of the data change, the model's performance may degrade or become invalid (Wu & Yang, 2022). Therefore, it is essential to evaluate the model's performance on new data periodically and retrain the model as needed. Beside that, it is important to consider the context of the problem and the business/application requirements when evaluating the model's usefulness. Even if the model has good performance on the Boston Housing data, it may not be suitable or relevant for other particular use case. Therefore, it is important to carefully consider the strengths and limitations of the model before applying it to other data or making decisions based on its predictions.
+
+|      According to Wu and Yang (2022), the `xgbLinear` model is a powerful and flexible machine learning algorithm that is well-suited for regression problems such as predicting house prices. However, there are limitations and assumptions to be considered. One of the assumptions of the xgbLinear model is that the relationship between the predictors and the response variable is linear, which may not always hold true in practice. Nonlinear relationships may require different modeling approaches, such as using polynomial predictors or nonlinear models. Furthermore, the model assumes that the predictors are independent, which may not always be the case. There may be interactions between predictors or confounding variables that affect the response variable. Therefore, it is important to carefully consider the predictors used in the model and perform feature engineering to identify relevant interactions and confounding variables.
+
+|      Future work could involve exploring other machine learning algorithms, such as neural networks or random forests, and comparing their performance with the `xgbLinear` model. Additionally, improving the feature engineering process and incorporating external data sources could enhance the model's predictive power. For example, including demographic data or information on nearby amenities could provide additional insights into the value of a property. Finally, it would be beneficial to evaluate the model's performance on new data or in different geographic regions to assess its generalizability and potential for broader applications (Soltani et al., 2022).
+
+## Reference
+
+X. Wu and B. Yang, "Ensemble Learning Based Models for House Price Prediction, Case Study: Miami, U.S," 2022 5th International Conference on Advanced Electronic Materials, Computers and Software Engineering (AEMCSE), Wuhan, China, 2022, pp. 449-458, doi: 10.1109/AEMCSE55572.2022.00095.
+
+Soltani, A., Heydari, M., Aghaei, F., & Pettit, C. J. (2022) "Housing price prediction incorporating spatio-temporal dependency into machine learning algorithms." Cities, 131, 103941, doi: 10.1016/j.cities.2022.103941.
+
+
+```{r}
+library(quanteda)
+text <- readLines("GEOG Assignment.Rmd")
+tokens <- tokens(text)
+dfm <- dfm(tokens)
+wordcount <- sum(dfm)
+wordcount
+```
+
+
+
